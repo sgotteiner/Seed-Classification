@@ -3,5 +3,4 @@
 
 # But keep .ipynb files
 !*.ipynb
-
 !.gitignore
