@@ -1,6 +1,2 @@
-# Ignore all files
-*
-
-# But keep .ipynb files
-!*.ipynb
-!.gitignore
+home
+normalization_parameters
