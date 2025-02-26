@@ -8,7 +8,7 @@ from SeedResizer import create_resized_image, save_max_width_height
 seeds_path = r'home\ARO.local\collaboration\Itai-tomer\tomer_data'
 healthy_seeds_path = seeds_path + r'\Healthy'
 infected_seeds_path = seeds_path + r'\Infected'
-preprocessed_seeds_path = r'home\ARO.local\collaboration\Normalized_Tomato_Seeds'
+preprocessed_seeds_path = r'home\ARO.local\collaboration\sagi-tomer-collab\Normalized_Tomato_Seeds'
 normalization_parameters_path = preprocessed_seeds_path + r'\normalization_parameters'
 
 
