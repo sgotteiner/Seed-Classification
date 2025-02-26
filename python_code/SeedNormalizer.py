@@ -3,26 +3,20 @@
 
 import numpy as np
 
-from SeedMaskExtractor import extract_seed_pixels
-from SeedFinder import find_paths_of_seeds
+from SeedMaskExtractor import extract_seed_pixels, get_all_seeds_pixels_in_folder
 
 
 # The most consistant band is the band that changes the least between healthy and infected seeds. This band could be used as a reference band for the illumination normalization. It also takes into account the brightness of the bands. It is calculated as the band_brightness // (1 + band_mean_difference).
 
-def calculate_total_seeds_mean_per_band(seeds_paths):
-    total_mean = 0
-    for path in seeds_paths:
-        seed_pixels_all = extract_seed_pixels(np.load(path))[0]
-        total_mean += np.mean(seed_pixels_all, axis=(0))
-    
-    return total_mean // len(seeds_paths)
+def calculate_total_seeds_mean_per_band(seed_pixels):
+    return np.mean(seed_pixels, axis=(0))
 
-def find_the_most_consistant_band(healthy_seeds_paths, infected_seeds_paths, brightest_percentile=90):
+def find_the_most_consistant_band(healthy_seed_pixels, infected_seed_pixels, brightest_percentile=90):
     """
     This function finds the most consistant band that changes the least between healthy and infected seeds among the brightest bands.
     """
-    healthy_seeds_mean_per_band = calculate_total_seeds_mean_per_band(healthy_seeds_paths)
-    infected_seeds_mean_per_band = calculate_total_seeds_mean_per_band(infected_seeds_paths)
+    healthy_seeds_mean_per_band = calculate_total_seeds_mean_per_band(healthy_seed_pixels)
+    infected_seeds_mean_per_band = calculate_total_seeds_mean_per_band(infected_seed_pixels)
 
     spectral_difference = np.abs(healthy_seeds_mean_per_band - infected_seeds_mean_per_band)
     bands_total_brightness = healthy_seeds_mean_per_band + infected_seeds_mean_per_band
@@ -42,19 +36,21 @@ def illumination_ratio_based_normalization(data, most_consistent_band):
     reference_band = data[:, most_consistent_band] + epsilon
     return data / reference_band[:, np.newaxis]
 
-def save_zscore_parameters(illumination_normalized, illumination_normalized_name):
+def save_zscore_parameters(illumination_normalized, illumination_normalized_name, saving_path):
     illumination_normalized_band_means = np.mean(illumination_normalized, axis=0, keepdims=True)
     illumination_normalized_band_stds = np.std(illumination_normalized, axis=0, keepdims=True)
-    np.save(f'normalization_parameters/{illumination_normalized_name}_means.npy', illumination_normalized_band_means)
-    np.save(f'normalization_parameters/{illumination_normalized_name}_stds.npy', illumination_normalized_band_stds)
+    np.save(f'{saving_path}\{illumination_normalized_name}_means.npy', illumination_normalized_band_means)
+    np.save(f'{saving_path}\{illumination_normalized_name}_stds.npy', illumination_normalized_band_stds)
 
-def save_normalization_parameters(healthy_seeds_pixels, infected_seeds_pixels, healthy_seeds_folder, infected_seeds_folder):
-    most_consistent_band = find_the_most_consistant_band(find_paths_of_seeds(healthy_seeds_folder), find_paths_of_seeds(infected_seeds_folder))
-    np.save('normalization_parameters/most_consistent_band.npy', most_consistent_band)
-    healthy_illumination_ratio_based_normalized = illumination_ratio_based_normalization(healthy_seeds_pixels, most_consistent_band)
-    save_zscore_parameters(healthy_illumination_ratio_based_normalized, 'healthy_illumination_ratio_based_normalized')
-    infected_illumination_ratio_based_normalized = illumination_ratio_based_normalization(infected_seeds_pixels, most_consistent_band)
-    save_zscore_parameters(infected_illumination_ratio_based_normalized, 'infected_illumination_ratio_based_normalized')
+def save_normalization_parameters(healthy_seeds_path, infected_seeds_path, saving_path):
+    healthy_seed_pixels = get_all_seeds_pixels_in_folder(healthy_seeds_path)
+    infected_seed_pixels = get_all_seeds_pixels_in_folder(infected_seeds_path)
+    most_consistent_band = find_the_most_consistant_band(healthy_seed_pixels, infected_seed_pixels)
+    np.save(f'{saving_path}\most_consistent_band.npy', most_consistent_band)
+    healthy_illumination_ratio_based_normalized = illumination_ratio_based_normalization(healthy_seed_pixels, most_consistent_band)
+    save_zscore_parameters(healthy_illumination_ratio_based_normalized, 'healthy_illumination_ratio_based_normalized', saving_path)
+    infected_illumination_ratio_based_normalized = illumination_ratio_based_normalization(infected_seed_pixels, most_consistent_band)
+    save_zscore_parameters(infected_illumination_ratio_based_normalized, 'infected_illumination_ratio_based_normalized', saving_path)
 
 
 # Zscore reduces noise and shifts the range of the values between a small negative number to a small positive value.

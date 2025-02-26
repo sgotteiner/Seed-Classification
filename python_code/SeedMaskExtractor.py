@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 from scipy.spatial import Delaunay
+
+from SeedFinder import find_paths_of_seeds
 
 
 # Find the seed in the image using Opencv and Scipy.
@@ -66,3 +67,6 @@ def extract_seed_pixels(seed, start_band=100, end_band=740):
     # TODO add choice to find all the nonzero spatial pixels in the middle band or all bands because the middle band has more pixels and all bands has less noise
     seed_pixels_200 = np.argwhere(seed_mask_all_bands[:,:,200])
     return seed_mask_all_bands[seed_pixels_200[:, 0], seed_pixels_200[:, 1], :], seed_pixels_200, seed_mask_all_bands.shape
+
+def get_all_seeds_pixels_in_folder(folder):
+    return np.vstack([extract_seed_pixels(np.load(path))[0] for path in find_paths_of_seeds(folder)])
