@@ -87,4 +87,4 @@ def normalize_seed(seed, most_consistent_band, bands_means, bands_stds):
     normalized_seed_pixels = zscore_normalize(seed_illumination_ratio_based_normalization, bands_means, bands_stds)
     normalized_seed = np.zeros(shape)
     normalized_seed[seed_pixels_spatial_indices[:, 0], seed_pixels_spatial_indices[:, 1], :] = normalized_seed_pixels
-    return normalized_seed
+    return normalized_seed.astype(np.float32)
