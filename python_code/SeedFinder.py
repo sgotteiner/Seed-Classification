@@ -13,7 +13,7 @@ def find_paths_of_seeds(directory):
     return paths
 
 def seed_rename(old_name):
-    split_old_name = old_name.split('\\')
+    split_old_name = old_name.split(os.sep)
     tray_number = split_old_name[-3][1]
     position = split_old_name[-1].split('.')[0]
     row = int(ord(position[1]) - ord('A'))

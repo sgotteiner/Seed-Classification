@@ -62,11 +62,11 @@ def get_seed_masked_image(hyperspectral_seed, band_number):
 # This function gets a seed and returns the seed pixels, their indices, and the shape.
 
 def extract_seed_pixels(seed, start_band=100, end_band=740):
-    _, y_start, x_start, height, width = find_seed_mask(seed[:,:,200])
+    _, y_start, x_start, height, width = find_seed_mask(seed[:,:,200].astype(np.float32))
     seed_mask_all_bands = seed[y_start:y_start+height,x_start:x_start+width,start_band:end_band]
     # TODO add choice to find all the nonzero spatial pixels in the middle band or all bands because the middle band has more pixels and all bands has less noise
     seed_pixels_200 = np.argwhere(seed_mask_all_bands[:,:,200])
     return seed_mask_all_bands[seed_pixels_200[:, 0], seed_pixels_200[:, 1], :], seed_pixels_200, seed_mask_all_bands.shape
 
 def get_all_seeds_pixels_in_folder(folder):
-    return np.vstack([extract_seed_pixels(np.load(path))[0] for path in find_paths_of_seeds(folder)])
+    return np.vstack([extract_seed_pixels(np.load(path, mmap_mode='r'))[0] for path in find_paths_of_seeds(folder)])

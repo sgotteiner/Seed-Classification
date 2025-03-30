@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import numpy as np
+import os
 
 from SeedMaskExtractor import find_seed_width_height_area
 from SeedFinder import find_paths_of_seeds
@@ -19,8 +20,8 @@ def find_max_width_height_area_of_seeds(seeds_folder):
 
 def save_max_width_height(seeds_path, save_path):
     max_width, max_height, _ = find_max_width_height_area_of_seeds(seeds_path)
-    np.save(f'{save_path}\max_width.npy', max_width)
-    np.save(f'{save_path}\max_height.npy', max_height)
+    np.save(os.path.join(save_path, 'max_width.npy'), max_width)
+    np.save(os.path.join(save_path, 'max_height.npy'), max_height)
 
 def create_resized_image(image, max_width, max_height, data_type):
     height, width, bands = image.shape
