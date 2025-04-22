@@ -4,7 +4,10 @@
 import os
 import numpy as np
 import tensorflow as tf
+import torch
+from torch.utils.data import Dataset, DataLoader, random_split
 from sklearn.model_selection import train_test_split
+import pytorch_lightning as pl
 import random
 
 
@@ -17,6 +20,7 @@ def prepare_data(healthy_dir, infected_dir, n_healthy=-1, n_infected=-1, test_si
     if n_infected == -1:
         n_infected = len(infected_files)
 
+    random.seed(42)
     healthy_files = random.sample(healthy_files, min(n_healthy, len(healthy_files)))
     infected_files = random.sample(infected_files, min(n_infected, len(infected_files)))
 
@@ -59,3 +63,26 @@ class HyperspectralDataset:
         dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
 
         return dataset
+    
+
+class HyperspectralTorchDataset(torch.utils.data.Dataset):
+    def __init__(self, file_paths, labels, bands, shape):
+        self.file_paths = np.array(file_paths)
+        self.labels = np.array(labels, dtype=np.float32)
+        self.bands = bands
+        self.shape = shape
+
+    def __getitem__(self, idx):
+        path = self.file_paths[idx]
+        image = np.load(path, mmap_mode='r')  # zero copy
+
+        image = image[:, :, self.bands]       # view if self.bands is simple (not fancy indexing)
+        image = np.moveaxis(image, -1, 0)     # view, but must assign it!
+
+        image = torch.from_numpy(image)       # zero-copy
+        label = self.labels[idx]
+
+        return image, label
+
+    def __len__(self):
+        return len(self.file_paths)

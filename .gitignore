@@ -1,4 +1,5 @@
 home
 python_code/__pycache__
 Models
+lightning_logs
 mprofile*
