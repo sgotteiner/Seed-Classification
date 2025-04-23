@@ -11,7 +11,8 @@ from pathlib import Path
 import json
 from sklearn.metrics import classification_report, confusion_matrix
 from ManualCNNClassifier import HyperspectralCNN
-from python_code.SpectralSpatialModuleClassifier import SpectralSpatialModuleModel
+from SpectralSpatialModuleClassifier import SpectralSpatialModuleModel
+from SpectralSpatialAttentionModel import SpectralSpatialAttentionModel
 from DataGenerator import prepare_data, HyperspectralTorchDataset
 import multiprocessing as mp
 
@@ -51,7 +52,7 @@ if __name__ == '__main__':
 
     # Parameters
     n = 800
-    bands = sorted([504])
+    bands = sorted([0, 319, 639])
     height = np.load(seeds_path / 'normalization_parameters' / 'max_height.npy').item() + 2
     width = np.load(seeds_path / 'normalization_parameters' / 'max_width.npy').item() + 2
     shape = (height, width, len(bands))
@@ -71,7 +72,8 @@ if __name__ == '__main__':
 
     # Model
     # model = HyperspectralCNN(shape[-1])
-    model = SpectralSpatialModuleModel(shape[-1])
+    # model = SpectralSpatialModuleModel(shape[-1])
+    model = SpectralSpatialAttentionModel(shape[-1])
     model = torch.compile(model, backend="eager")
     model_name = model.__class__.__name__
 
@@ -111,6 +113,8 @@ if __name__ == '__main__':
     for x, y in test_loader:
         with torch.no_grad():
             logits = model(x)
+            if isinstance(logits, tuple):
+                logits, spec_w, spat_map, fusion_w = logits
             preds.extend((logits > 0.5).int().cpu().numpy().flatten())
             targets.extend(y.cpu().numpy())
     
