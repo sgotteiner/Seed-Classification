@@ -1,4 +1,3 @@
-
 import time
 total_run_time = time.time()
 
@@ -9,10 +8,12 @@ import psutil
 import numpy as np
 from pathlib import Path
 import json
+import random
 from sklearn.metrics import classification_report, confusion_matrix
-from ManualCNNClassifier import HyperspectralCNN
+from ManualCNNClassifier import HyperspectralCNN, HyperspectralMultiCNN
 from SpectralSpatialModuleClassifier import SpectralSpatialModuleModel
-from SpectralSpatialAttentionModel import SpectralSpatialAttentionModel
+from SpectralSpatialAttentionModel import SpectralSpatialSingleHeatmapAttentionModel, SpectralSpatialMultiHeatmapAttentionModel, SpectralSpatialPatchHeatmapAttentionModel
+from BandAttentionModel import BandAttentionModel
 from DataGenerator import prepare_data, HyperspectralTorchDataset
 import multiprocessing as mp
 
@@ -37,9 +38,19 @@ if __name__ == '__main__':
     # import pytorch inside main in order to let the environment load before torch backends start doing stuff.
     import torch
     from torch.utils.data import DataLoader
+    import pytorch_lightning as pl
     from pytorch_lightning import Trainer
     from pytorch_lightning.profilers import SimpleProfiler
     from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor
+    pl.seed_everything(42, workers=True)
+
+    seed = 42
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     print_env()
 
@@ -51,15 +62,16 @@ if __name__ == '__main__':
     logs_dir = Path('home') / 'ARO.local' / 'sagig' / 'Projects' / 'seed_classification'
 
     # Parameters
-    n = 800
-    bands = sorted([0, 319, 639])
+    n = 8000
+    bands = sorted(range(1, 639, 63))
+    # bands = sorted([64, 505, 631])
     height = np.load(seeds_path / 'normalization_parameters' / 'max_height.npy').item() + 2
     width = np.load(seeds_path / 'normalization_parameters' / 'max_width.npy').item() + 2
     shape = (height, width, len(bands))
     batch_size = 32
 
     # Data splits
-    (train_files, train_labels), (val_files, val_labels), (test_files, test_labels) = prepare_data(str(healthy_dir), str(infected_dir), n, n)
+    (train_files, train_labels), (val_files, val_labels), (test_files, test_labels) = prepare_data(str(healthy_dir), str(infected_dir), n, n, 0.7)
 
     train_dataset = HyperspectralTorchDataset(train_files, train_labels, bands, shape)
     val_dataset = HyperspectralTorchDataset(val_files, val_labels, bands, shape)
@@ -72,9 +84,15 @@ if __name__ == '__main__':
 
     # Model
     # model = HyperspectralCNN(shape[-1])
+    # model = HyperspectralMultiCNN(shape[-1])
     # model = SpectralSpatialModuleModel(shape[-1])
-    model = SpectralSpatialAttentionModel(shape[-1])
-    model = torch.compile(model, backend="eager")
+    # model = SpectralSpatialSingleHeatmapAttentionModel(shape[-1])
+    # model = SpectralSpatialMultiHeatmapAttentionModel(shape[-1])
+    # model = SpectralSpatialPatchHeatmapAttentionModel(shape[-1])
+    model = BandAttentionModel(shape[-1])
+
+    # model = torch.compile(model, backend="eager")
+    # model_name = model._orig_mod.__class__.__name__
     model_name = model.__class__.__name__
 
     # Callbacks
@@ -82,7 +100,7 @@ if __name__ == '__main__':
     ckpt_path = models_dir / f'{model_name}_{bands_str}'
     checkpoint_cb = ModelCheckpoint(
         dirpath=models_dir,
-        filename=f"{model_name}_{bands_str}" + "-{val_loss:.4f}",
+        filename=f"{model_name}_{bands_str}_data_{2*n}_seed{seed}" + "-{val_loss:.4f}",
         save_top_k=1,
         monitor="val_loss",
         mode="min"
@@ -100,6 +118,7 @@ if __name__ == '__main__':
         accelerator="auto",
         # profiler=profiler
     )
+    
 
     # Train
     training_time = time.time()
@@ -107,35 +126,49 @@ if __name__ == '__main__':
     training_time = time.time() - training_time
     # print(profiler.summary())
 
-    # Test
-    model.eval()
-    preds, targets = [], []
-    for x, y in test_loader:
-        with torch.no_grad():
-            logits = model(x)
-            if isinstance(logits, tuple):
-                logits, spec_w, spat_map, fusion_w = logits
-            preds.extend((logits > 0.5).int().cpu().numpy().flatten())
-            targets.extend(y.cpu().numpy())
-    
-    # see band importances
-    if type(model) is SpectralSpatialModuleModel:
-        spectral_weights = model.spectral.weights.detach().cpu().numpy()
-        print('Importances:', spectral_weights)
+    if trainer.is_global_zero:
+        # Test
+        model.eval()
+        preds, targets = [], []
+        for x, y in test_loader:
+            with torch.no_grad():
+                output = model(x)
+                if isinstance(output, tuple):
+                    if len(output) == 4:
+                        logits, spec_w, spat_map, fusion_w = output
+                    elif len(output) == 2:
+                        logits, attn_weights = output
+                else:
+                    logits = output  # if model returns just logits
+                # Robust prediction extraction for multiclass and binary
+                if logits.shape[-1] == 1:
+                    # Binary classification: logits shape [batch, 1]
+                    preds.extend((logits > 0.5).int().cpu().numpy().squeeze())
+                else:
+                    # Multiclass (including 2-class softmax): logits shape [batch, num_classes]
+                    preds.extend(logits.argmax(dim=1).cpu().numpy())
+                targets.extend(y.cpu().numpy())
 
-    report = classification_report(targets, preds, digits=4, output_dict=True)
-    cm = confusion_matrix(targets, preds)
-    print(report)
-    print(f"Test Accuracy: {report['accuracy']}")
+        # see band importances
+        if type(model) is SpectralSpatialModuleModel:
+            spectral_weights = model.spectral.weights.detach().cpu().numpy()
+            print('Importances:', spectral_weights)
 
-    # Save results
-    accuracy = round(report["accuracy"], 3)
-    suffix = f'{bands_str}-bands-{accuracy}-accuracy'
-    torch.save(model.state_dict(), models_dir / f'{model_name}_{suffix}.pt')
-    with open(models_dir / f'{model_name}_{suffix}_report.json', "w") as f:
-        json.dump(report, f, indent=4)
-    with open(models_dir / f'{model_name}_{suffix}_cm.json', "w") as f:
-        json.dump(cm.tolist(), f)
+        report = classification_report(targets, preds, digits=4, output_dict=True)
+        cm = confusion_matrix(targets, preds)
+        print(report)
+        print(f"Test Accuracy: {report['accuracy']}")
+        print(bands)
+        print(2*n)
 
-    total_run_time = time.time() - total_run_time
-    print(f'total run time: {total_run_time}', f'training time: {training_time}')
+        # Save results
+        accuracy = round(report["accuracy"], 3)
+        suffix = f'{bands_str}-bands-{accuracy}-accuracy'
+        torch.save(model.state_dict(), models_dir / f'{model_name}_{suffix}.pt')
+        with open(models_dir / f'{model_name}_{suffix}_report.json', "w") as f:
+            json.dump(report, f, indent=4)
+        with open(models_dir / f'{model_name}_{suffix}_cm.json', "w") as f:
+            json.dump(cm.tolist(), f)
+
+        total_run_time = time.time() - total_run_time
+        print(f'total run time: {total_run_time}', f'training time: {training_time}')

@@ -11,7 +11,7 @@ import pytorch_lightning as pl
 import random
 
 
-def prepare_data(healthy_dir, infected_dir, n_healthy=-1, n_infected=-1, test_size=0.2, val_size=0.1):
+def prepare_data(healthy_dir, infected_dir, n_healthy=-1, n_infected=-1, test_size=0.7, val_size=0.1):
     healthy_files = [os.path.join(healthy_dir, f) for f in os.listdir(healthy_dir) if f.endswith('.npy')]
     infected_files = [os.path.join(infected_dir, f) for f in os.listdir(infected_dir) if f.endswith('.npy')]
 
