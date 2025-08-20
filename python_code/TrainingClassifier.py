@@ -1,11 +1,11 @@
 import time
 total_run_time = time.time()
-
 import os
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import platform
 import psutil
 import numpy as np
+import pandas as pd
 from pathlib import Path
 import json
 import random
@@ -40,6 +40,7 @@ if __name__ == '__main__':
     from torch.utils.data import DataLoader
     import pytorch_lightning as pl
     from pytorch_lightning import Trainer
+    from pytorch_lightning.loggers import CSVLogger
     from pytorch_lightning.profilers import SimpleProfiler
     from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor
     pl.seed_everything(42, workers=True)
@@ -63,15 +64,15 @@ if __name__ == '__main__':
 
     # Parameters
     n = 8000
-    bands = sorted(range(1, 639, 63))
-    # bands = sorted([64, 505, 631])
+    # bands = sorted(range(1, 639, 63))
+    bands = sorted([64, 127, 568])
     height = np.load(seeds_path / 'normalization_parameters' / 'max_height.npy').item() + 2
     width = np.load(seeds_path / 'normalization_parameters' / 'max_width.npy').item() + 2
     shape = (height, width, len(bands))
     batch_size = 32
 
     # Data splits
-    (train_files, train_labels), (val_files, val_labels), (test_files, test_labels) = prepare_data(str(healthy_dir), str(infected_dir), n, n, 0.7)
+    (train_files, train_labels), (val_files, val_labels), (test_files, test_labels) = prepare_data(str(healthy_dir), str(infected_dir), n, n, 0.5)
 
     train_dataset = HyperspectralTorchDataset(train_files, train_labels, bands, shape)
     val_dataset = HyperspectralTorchDataset(val_files, val_labels, bands, shape)
@@ -108,12 +109,14 @@ if __name__ == '__main__':
     early_stop_cb = EarlyStopping(monitor="val_loss", patience=5, mode="min")
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
+    csv_logger = CSVLogger(save_dir=logs_dir, name=f"{model_name}_{bands_str}")
     # profiler = SimpleProfiler()
     trainer = Trainer(
         precision="16-mixed" if torch.cuda.is_available() else "32-true",
         default_root_dir=logs_dir,
         max_epochs=50,
         callbacks=[early_stop_cb, checkpoint_cb, lr_monitor],
+        logger=csv_logger,
         log_every_n_steps=10,
         accelerator="auto",
         # profiler=profiler
@@ -154,6 +157,8 @@ if __name__ == '__main__':
             spectral_weights = model.spectral.weights.detach().cpu().numpy()
             print('Importances:', spectral_weights)
 
+        metrics_path = csv_logger.experiment.metrics_file_path
+        history = pd.read_csv(metrics_path).to_dict(orient="list")
         report = classification_report(targets, preds, digits=4, output_dict=True)
         cm = confusion_matrix(targets, preds)
         print(report)
@@ -165,6 +170,8 @@ if __name__ == '__main__':
         accuracy = round(report["accuracy"], 3)
         suffix = f'{bands_str}-bands-{accuracy}-accuracy'
         torch.save(model.state_dict(), models_dir / f'{model_name}_{suffix}.pt')
+        with open(models_dir / f'{model_name}_{suffix}_history.json', "w") as f:
+            json.dump(history, f, indent=4)
         with open(models_dir / f'{model_name}_{suffix}_report.json', "w") as f:
             json.dump(report, f, indent=4)
         with open(models_dir / f'{model_name}_{suffix}_cm.json', "w") as f:
