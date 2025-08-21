@@ -9,4 +9,4 @@ There is an inference notebook with an example.
 
 # Code
 * The code that was used for development is in the python_code folder. All the final preprocessing codes, models, pipeline, and scripts that I later executed on the HPC are there.
-* The interpretability and results code, as well as examples of how the preprocessing looked are in the notebook_code folder.
+* The interpretability and results code, as well as examples of how the preprocessing looked are in the notebook_code folder. At the top of the irrelevant notebooks I wrote "Irrelevant" in a dedicated markdown cell.
