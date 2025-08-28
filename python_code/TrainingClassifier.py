@@ -5,7 +5,7 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import platform
 import psutil
 import numpy as np
-# import pandas as pd
+import pandas as pd
 from pathlib import Path
 import json
 import random
@@ -158,7 +158,7 @@ if __name__ == '__main__':
             print('Importances:', spectral_weights)
 
         metrics_path = csv_logger.experiment.metrics_file_path
-        # history = pd.read_csv(metrics_path).to_dict(orient="list")
+        history = pd.read_csv(metrics_path).to_dict(orient="list")
         report = classification_report(targets, preds, digits=4, output_dict=True)
         cm = confusion_matrix(targets, preds)
         print(report)
@@ -170,8 +170,8 @@ if __name__ == '__main__':
         accuracy = round(report["accuracy"], 3)
         suffix = f'{bands_str}-bands-{accuracy}-accuracy'
         torch.save(model.state_dict(), models_dir / f'{model_name}_{suffix}.pt')
-        # with open(models_dir / f'{model_name}_{suffix}_history.json', "w") as f:
-        #     json.dump(history, f, indent=4)
+        with open(models_dir / f'{model_name}_{suffix}_history.json', "w") as f:
+            json.dump(history, f, indent=4)
         with open(models_dir / f'{model_name}_{suffix}_report.json', "w") as f:
             json.dump(report, f, indent=4)
         with open(models_dir / f'{model_name}_{suffix}_cm.json', "w") as f:
